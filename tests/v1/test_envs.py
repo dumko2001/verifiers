@@ -22,7 +22,10 @@ ENVIRONMENTS = Path(__file__).parent.parent.parent / "environments"
 # v1 tasksets that can't run a plain-CI smoke eval — e.g. they need a docker/prime runtime or
 # clone a corpus CI can't read. Empty: the SWE/container and corpus tasksets live in
 # research-environments now.
-SKIP_EVAL: set[str] = set()
+SKIP_EVAL: set[str] = {
+    # Not installed by the default examples dependency group; covered by packaging/import tests.
+    "mmmu_v1",
+}
 
 
 def v1_tasksets() -> list[str]:
