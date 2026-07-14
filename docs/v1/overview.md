@@ -34,6 +34,7 @@ A trace records the message graph, rewards, metrics, errors, etc. When using ver
 - [Architecture](architecture.md) — An overview about the architecture and runtime of verifiers
 - [Environments](environments.md) — How to create environments
   - [Harbor Environments](harbor.md) — How to create Harbor-based environments
+  - [OpenEnv Environments](openenv.md) — How to run OpenEnv environments
 - [Evaluation](evaluation.md) — How to run said environments
 - [Harnesses](harnesses.md) — How to build custom harnesses
 

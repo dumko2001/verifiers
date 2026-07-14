@@ -115,6 +115,8 @@ def _import_ref(ref: str) -> object:
 class ServerBase(Generic[ConfigT, StateT]):
     # The empty value falls back to the snake-cased class name.
     TOOL_PREFIX: ClassVar[str] = ""
+    # Dependencies for reusable built-in servers that have no package of their own.
+    PYTHON_DEPENDENCIES: ClassVar[tuple[str, ...]] = ()
 
     def __init__(self, config: ConfigT) -> None:
         self.config = config
@@ -221,6 +223,9 @@ class ServerBase(Generic[ConfigT, StateT]):
     async def setup_task(self, task) -> None:
         """Initialize per-task state; taskset-scoped servers skip this hook."""
 
+    async def teardown(self) -> None:
+        """Release resources created by `setup` or `setup_task` on graceful shutdown."""
+
     def _register(self, mcp: FastMCP) -> None:
         raise NotImplementedError
 
@@ -243,12 +248,6 @@ class ServerBase(Generic[ConfigT, StateT]):
         if port_file:
             Path(port_file).write_text(str(sock.getsockname()[1]))
 
-        async def _setup() -> None:
-            await self.setup()
-            # Shared taskset-scoped servers have no task channel and skip this hook.
-            await self._setup_task_from_channel(*self._state_channel())
-
-        asyncio.run(_setup())
         # These servers are reached by the harness through localhost or a tunnel, never a browser.
         from mcp.server.transport_security import TransportSecuritySettings
 
@@ -261,25 +260,24 @@ class ServerBase(Generic[ConfigT, StateT]):
         )
         self._register(mcp)
         app = mcp.streamable_http_app()
-        mcp_lifespan = app.router.lifespan_context
 
-        @contextlib.asynccontextmanager
-        async def serving_lifespan(starlette):
+        server = uvicorn.Server(uvicorn.Config(app, log_level="critical"))
+
+        async def serve() -> None:
             import httpx
 
             try:
-                async with (
-                    httpx.AsyncClient(timeout=STATE_TIMEOUT) as client,
-                    mcp_lifespan(starlette),
-                ):
+                # Setup and serving share one event loop, so setup may retain async resources.
+                await self.setup()
+                await self._setup_task_from_channel(*self._state_channel())
+                async with httpx.AsyncClient(timeout=STATE_TIMEOUT) as client:
                     self._state_client = client
-                    yield
+                    await server.serve(sockets=[sock])
             finally:
+                await self.teardown()
                 self._state_client = None
 
-        app.router.lifespan_context = serving_lifespan
-        server = uvicorn.Server(uvicorn.Config(app, log_level="critical"))
-        asyncio.run(server.serve(sockets=[sock]))
+        asyncio.run(serve())
 
     @classmethod
     def _config_cls(cls) -> type[BaseConfig]:

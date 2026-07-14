@@ -118,21 +118,24 @@ async def _install_in_sandbox(server: ServerBase, runtime: Runtime) -> str:
     root = "/tmp/vf-src"
     vf, env = _verifiers_root(), Path(source_dir)
     await runtime.write(f"{root}/{vf.name}.tar.gz", _tar_source(vf, VF_BUILD_INPUTS))
-    await runtime.write(f"{root}/{env.name}.tar.gz", _tar_source(env))
+    if env != vf:
+        await runtime.write(f"{root}/{env.name}.tar.gz", _tar_source(env))
     venv = "/tmp/vf-venv"
     # The upload carries no .git, so hatch-vcs falls back to version 0.0.0 — an env
     # package's `verifiers>=...` floor would then resolve PyPI verifiers OVER the local
     # build, silently running the server against a released (older) API. Pretend the
     # local version so the floor is satisfied by the build we uploaded.
     vf_version = importlib.metadata.version("verifiers")
+    packages = shlex.join([f"{root}/{vf.name}", *server.PYTHON_DEPENDENCIES])
     setup = (
         f"{_ENSURE_UV}; set -e; "
         f'for t in {root}/*.tar.gz; do tar -xzf "$t" -C {root}; done && '
         f"uv venv {venv} && "
         f"SETUPTOOLS_SCM_PRETEND_VERSION={shlex.quote(vf_version)} "
-        f"uv pip install --python {venv} {root}/{shlex.quote(vf.name)} && "
-        f"uv pip install --python {venv} {root}/{shlex.quote(env.name)}"
+        f"uv pip install --python {venv} {packages}"
     )
+    if env != vf:
+        setup += f" && uv pip install --python {venv} {root}/{shlex.quote(env.name)}"
     result = await runtime.run(["sh", "-c", setup], {})
     if result.exit_code != 0:
         raise ToolsetError(
@@ -192,12 +195,20 @@ async def serve_in_runtime(
     else:
         port_file = f"/tmp/vf-port-{uuid.uuid4().hex}"
         env["MCP_PORT_FILE"] = port_file
-    if runtime.type == "subprocess":
-        python = sys.executable
-    else:
+    python = sys.executable
+    if runtime.type != "subprocess":
         python = await _install_in_sandbox(server, runtime)
+    command = [python, "-m", type(server).__module__]
+    if runtime.type != "subprocess":
+        # `_ENSURE_UV` exports PATH only during installation; user servers may launch
+        # uv-backed providers later and still need the installed binary.
+        command = [
+            "sh",
+            "-c",
+            f'export PATH="$HOME/.local/bin:$PATH"; exec {shlex.join(command)}',
+        ]
     log = f"vf_tool_{server.server_name}.log"
-    await runtime.run_background([python, "-m", type(server).__module__], env, log)
+    await runtime.run_background(command, env, log)
     if fixed is not None:
         port = fixed
     else:
