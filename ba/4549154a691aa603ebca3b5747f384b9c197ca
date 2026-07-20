@@ -1,0 +1,25 @@
+verifiers/v1/cli/eval/runner.py
+  s_cbd154bf332953::t_dd86627e438b96 239
+  s_cbd154bf332953::t_b1df7fbc546774 251
+  s_cbd154bf332953::t_a4d3ed2b7a4d2a 35
+  s_cbd154bf332953::t_4809abca447c12 79-82
+  s_cbd154bf332953::t_01202ea5213721 39-43,49-53,58,92-94
+verifiers/v1/cli/eval/resume.py
+  s_cbd154bf332953::t_d6e9ae839049df 65-69,77-81,94-100,102-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "ba4549154a691aa603ebca3b5747f384b9c197ca",
+  "prompts": {},
+  "sessions": {
+    "s_cbd154bf332953": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7c9d44e-6199-498e-a043-10945b22f2e9",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": null
+    }
+  }
+}
